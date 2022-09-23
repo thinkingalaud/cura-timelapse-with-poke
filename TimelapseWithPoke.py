@@ -5,7 +5,7 @@ from UM.Logger import Logger
 
 from typing import List, Tuple
 
-class PauseAtHeight(Script):
+class TimelapseWithPoke(Script):
     def __init__(self) -> None:
         super().__init__()
 
@@ -17,91 +17,75 @@ class PauseAtHeight(Script):
             "version": 2,
             "settings":
             {
+                "pause_length":
+                {
+                    "label": "Pause length",
+                    "description": "How long to wait (in ms) after camera was triggered.",
+                    "type": "int",
+                    "default_value": 700,
+                    "minimum_value": 0,
+                    "unit": "ms"
+                },
+                "park_print_head":
+                {
+                    "label": "Park Print Head",
+                    "description": "Park the print head out of the way. Assumes absolute positioning.",
+                    "type": "bool",
+                    "default_value": true
+                },
                 "head_park_x":
                 {
                     "label": "Park Print Head X",
-                    "description": "What X location does the head move to when pausing.",
+                    "description": "What X location does the head move to for photo.",
                     "unit": "mm",
                     "type": "float",
-                    "default_value": 190,
+                    "default_value": 0,
+                    "enabled": "park_print_head"
                 },
                 "head_park_y":
                 {
                     "label": "Park Print Head Y",
-                    "description": "What Y location does the head move to when pausing.",
+                    "description": "What Y location does the head move to for photo.",
                     "unit": "mm",
                     "type": "float",
                     "default_value": 190,
+                    "enabled": "park_print_head"
                 },
-                "head_move_z":
+                "park_feed_rate":
                 {
-                    "label": "Head Move Z",
-                    "description": "The Height of Z-axis retraction before parking.",
-                    "unit": "mm",
-                    "type": "float",
-                    "default_value": 5.0,
-                },
-                "poke_distance_x":
-                {
-                    "label": "Poke Distance",
-                    "description": "The distance in the X direction to poke.",
-                    "unit": "mm",
-                    "type": "float",
-                    "default_value": "1.0",
-                },
-                "pause_time":
-                {
-                    "label": "Pause Time",
-                    "description": "Amount of time to wait for the picture to be taken.",
-                    "unit": "ms",
-                    "type": "int",
-                    "default_value": "1000",
-                },
-                "retraction_amount":
-                {
-                    "label": "Retraction",
-                    "description": "How much filament must be retracted at pause.",
-                    "unit": "mm",
-                    "type": "float",
-                    "default_value": 0,
-                },
-                "retraction_speed":
-                {
-                    "label": "Retraction Speed",
-                    "description": "How fast to retract the filament.",
+                    "label": "Park Feed Rate",
+                    "description": "How fast does the head move to the park coordinates.",
                     "unit": "mm/s",
                     "type": "float",
-                    "default_value": 25,
+                    "default_value": 9000,
+                    "enabled": "park_print_head"
                 },
+                "retract":
+                {
+                    "label": "Retraction Distance",
+                    "description": "Filament retraction distance for camera trigger.",
+                    "unit": "mm",
+                    "type": "int",
+                    "default_value": 0
+                },
+                "zhop":
+                {
+                    "label": "Z-Hop Height When Parking",
+                    "description": "Z-hop length before parking",
+                    "unit": "mm",
+                    "type": "float",
+                    "default_value": 0
+                },
+                "poke_distance":
+                {
+                    "label": "Poke Distance",
+                    "description": "Distance in the x direction to poke trigger button.",
+                    "unit": "mm",
+                    "type": "float",
+                    "default_value": 0
+                }
             }
         }"""
-
-    def initialize(self) -> None:
-        super().initialize()
-
-        global_container_stack = Application.getInstance().getGlobalContainerStack()
-        if global_container_stack is None or self._instance is None:
-            return
-
-    def getLastXY(self, layer: str) -> Tuple[float, float]:
-        """Get the last X and Y values for a layer."""
-        lines = layer.split("\n")
-        for line in reversed(lines):
-            if line.startswith(("G0", "G1", "G2", "G3")):
-                if self.getValue(line, "X") is not None and self.getValue(line, "Y") is not None:
-                    x = self.getValue(line, "X")
-                    y = self.getValue(line, "Y")
-                    return x, y
-        return 0, 0
-
-    def getLastF(self, layer: str) -> Tuple[float, float]:
-        """Get the last F values for a layer."""
-        lines = layer.split("\n")
-        for line in reversed(lines):
-            if line.startswith(("G0", "G1", "G2", "G3")):
-                if self.getValue(line, "F") is not None:
-                    return self.getValue(line, "F")
-        return 0
 
     def execute(self, data: List[str]) -> List[str]:
         """Inserts the commands.
@@ -109,54 +93,62 @@ class PauseAtHeight(Script):
         :param data: List of layers.
         :return: New list of layers.
         """
-        retraction_amount = self.getSettingValueByKey("retraction_amount")
-        retraction_speed = self.getSettingValueByKey("retraction_speed")
-        park_x = self.getSettingValueByKey("head_park_x")
-        park_y = self.getSettingValueByKey("head_park_y")
-        move_z = self.getSettingValueByKey("head_move_z")
-        poke_distance_x = self.getSettingValueByKey("poke_distance_x")
-        pause_time = self.getSettingValueByKey("pause_time")
-        layers_started = False
+        feed_rate = self.getSettingValueByKey("park_feed_rate")
+        park_print_head = self.getSettingValueByKey("park_print_head")
+        x_park = self.getSettingValueByKey("head_park_x")
+        y_park = self.getSettingValueByKey("head_park_y")
+        pause_length = self.getSettingValueByKey("pause_length")
+        retract = int(self.getSettingValueByKey("retract"))
+        zhop = self.getSettingValueByKey("zhop")
+        poke_distance = self.getSettingValueByKey("poke_distance")
+        gcode_to_append = ''
+        last_x = 0
+        last_y = 0
+        last_z = 0
 
-        for index, layer in enumerate(data):
+        if park_print_head:
+            gcode_to_append += self.putValue(G=1, F=feed_rate, X=x_park, Y=y_park) + " ;Park print head\n"
+        gcode_to_append += self.putValue(M=400) + " ;Wait for moves to finish\n"
+        gcode_to_append += self.putValue(G=1, X=x_park + poke_distance) + " ;Poke\n"
+        gcode_to_append += self.putValue(G=1, X=x_park) + " ;Unpoke\n"
+        gcode_to_append += self.putValue(G=4, P=pause_length) + " ;Wait for camera\n"
+
+        for idx, layer in enumerate(data):
+            for line in layer.split("\n"):
+                if self.getValue(line, "G") in {0, 1, 2, 3}:  # Track X,Y,Z location.
+                    last_x = self.getValue(line, "X", last_x)
+                    last_y = self.getValue(line, "Y", last_y)
+                    last_z = self.getValue(line, "Z", last_z)
+            # Check that a layer is being printed
             lines = layer.split("\n")
+            for line in lines:
+                if ";LAYER:" in line:
+                    layer += ";TimeLapseWithPoke Begin\n"
+                    if retract != 0: # Retract the filament so no stringing happens
+                        layer += self.putValue(M=83) + " ;Extrude Relative\n"
+                        layer += self.putValue(G=1, E=-retract, F=3000) + " ;Retract filament\n"
+                        layer += self.putValue(M=82) + " ;Extrude Absolute\n"
+                        layer += self.putValue(M=400) + " ;Wait for moves to finish\n" # Wait to fully retract before hopping
 
-            if not layers_started:
-                for line in lines:
-                    # First positive layer reached. Need to do this since sometimes the rafts are generated with negative layer numbers
-                    if ";LAYER:0" in line:
-                        layers_started = True
-                        break 
+                    if zhop != 0:
+                        layer += self.putValue(G=1, Z=last_z+zhop, F=3000) + " ;Z-Hop\n"
 
-            if not layers_started:
-                continue
+                    layer += gcode_to_append
 
-            x, y = getLastXY(layer)
-            f = getLastF(layer)
+                    if zhop != 0:
+                        layer += self.putValue(G=0, X=last_x, Y=last_y, Z=last_z) + ";Restore position \n"
+                    else:
+                        layer += self.putValue(G=0, X=last_x, Y=last_y) + ";Restore position \n"
 
-            append_gcode = []
-            append_gcode += ";TYPE:CUSTOM"
-            append_gcode += ";added code by post processing"
-            append_gcode += ";script: TimelapseWithPoke.py"
+                    if retract != 0:
+                        layer += self.putValue(M=400) + " ;Wait for moves to finish\n"
+                        layer += self.putValue(M=83) + " ;Extrude Relative\n"
+                        layer += self.putValue(G=1, E=retract, F=3000) + " ;Retract filament\n"
+                        layer += self.putValue(M=82) + " ;Extrude Absolute\n"
 
-            append_gcode += self.putValue(G=91) + " ; relative mode"
-            append_gcode += self.putValue(G=1, E=-retraction_amount, F=retraction_speed * 60) + " ; retract"
-            append_gcode += self.putValue(G=0, Z=move_z, F=300)
-            append_gcode += self.putValue(G=90) + " ; absolute mode"
-            append_gcode += self.putValue(G=0, X=park_x, Y=park_y, F=10000)
-            append_gcode += self.putValue(G=0, X=park_x + poke_distance_x, F=1000) + " ; poke"
-            append_gcode += self.putValue(G=0, X=park_x, F=1000) + " ; unpoke"
-            append_gcode += self.putValue(G=4, P=pause_time) + " ; wait for picture to be taken"
-            append_gcode += self.putValue(G=0, X=x, Y=y, F=10000) + " ; restore x, y"
-            append_gcode += self.putValue(G=91) + " ; relative mode"
-            append_gcode += self.putValue(G=1, E=retraction_amount - 1, F=retraction_speed * 60) + " ; restore filament"
-            append_gcode += self.putValue(G=0, Z=-move_z, F=300) + " ; restore z"
-            append_gcode += self.putValue(G=90) + " ; absolute mode"
-            append_gcode += self.putValue(G=0, F=f) + " ; reset feedrate"
+                    layer += ";TimeLapseWithPoke End\n"
 
-            layer += "\n".join(append_gcode)
-
-            # Override the data of this layer with the modified data
-            data[index] = layer
+                    data[idx] = layer
+                    break
         return data
 
