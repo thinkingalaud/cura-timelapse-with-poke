@@ -19,7 +19,7 @@ class TimelapseWithPoke(Script):
             {
                 "pause_length":
                 {
-                    "label": "Pause length",
+                    "label": "Pause Length",
                     "description": "How long to wait (in ms) after camera was triggered.",
                     "type": "int",
                     "default_value": 700,
@@ -83,6 +83,15 @@ class TimelapseWithPoke(Script):
                     "unit": "mm",
                     "type": "float",
                     "default_value": 0
+                },
+                "button_pause_length":
+                {
+                    "label": "Button Pause Length",
+                    "description": "How long to pause (in ms) after pressing down on the button. Useful for remotes that need some time to autofocus.",
+                    "unit": "ms",
+                    "type": "int",
+                    "default_value": 0,
+                    "minimum_value": 0
                 }
             }
         }"""
@@ -101,6 +110,7 @@ class TimelapseWithPoke(Script):
         retract = int(self.getSettingValueByKey("retract"))
         zhop = self.getSettingValueByKey("zhop")
         poke_distance = self.getSettingValueByKey("poke_distance")
+        button_pause_length = self.getSettingValueByKey("button_pause_length")
         gcode_to_append = ''
         last_x = 0
         last_y = 0
@@ -110,6 +120,8 @@ class TimelapseWithPoke(Script):
             gcode_to_append += self.putValue(G=1, F=feed_rate, X=x_park, Y=y_park) + " ;Park print head\n"
         gcode_to_append += self.putValue(M=400) + " ;Wait for moves to finish\n"
         gcode_to_append += self.putValue(G=1, X=x_park + poke_distance) + " ;Poke\n"
+        if button_pause_length > 0:
+            gcode_to_append += self.putValue(G=4, P=button_pause_length) + " ;Pause mid button press\n"
         gcode_to_append += self.putValue(G=1, X=x_park) + " ;Unpoke\n"
         gcode_to_append += self.putValue(G=4, P=pause_length) + " ;Wait for camera\n"
 
