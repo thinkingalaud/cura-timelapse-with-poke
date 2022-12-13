@@ -4,15 +4,17 @@ An [Ultimaker Cura](https://ultimaker.com/software/ultimaker-cura) script to tak
 
 
 ## Background
-The Anycubic Kobra doesn't have any support for the M240 gcode (trigger camera). In order to create timelapses where the head is parked out of the way, a custom script must be used. Inspired by this [Youtube video](https://www.youtube.com/watch?v=NawlHlLH4Zg), you can mount a remote for your camera and use the print head to poke the button to take a photo.
+The Anycubic Kobra doesn't have any support for the M240 gcode (trigger camera). In order to create timelapses where the head is parked out of the way, a custom script must be used. Inspired by this [Youtube video](https://www.youtube.com/watch?v=NawlHlLH4Zg), you can mount a remote for your camera and use the print head to poke the button to take a photo. However, using the Find and Replace method described in the video means that the print head is not in the correct location when resuming the print after poking the button, so your print may not have the same quality as without the poking mechanism.
+
+TODO: create a video explainer
+
+## Tools Needed
 
 Remote holder: https://www.printables.com/model/282413-gopro-remote-holder-for-anycubic-kobra
 
 Insert for Canon BR-E1 remote: https://www.printables.com/model/337344-canon-br-e1-remote-holder-insert
 
 Finger: https://www.printables.com/model/282412-remote-presser-finger
-
-TODO: create a video showcasing the entire setup
 
 ## Installation
 Copy the TimelapseWithPoke.py file to your scripts configuration folder (Help -> Show Configuration Folder -> scripts/) and restart Cura.
