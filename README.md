@@ -6,7 +6,7 @@ An [Ultimaker Cura](https://ultimaker.com/software/ultimaker-cura) script to tak
 ## Background
 The Anycubic Kobra doesn't have any support for the M240 gcode (trigger camera). In order to create timelapses where the head is parked out of the way, a custom script must be used. Inspired by this [Youtube video](https://www.youtube.com/watch?v=NawlHlLH4Zg), you can mount a remote for your camera and use the print head to poke the button to take a photo. However, using the Find and Replace method described in the video means that the print head is not in the correct location when resuming the print after poking the button, so your print may not have the same quality as without the poking mechanism.
 
-TODO: create a video explainer
+Check out my [YouTube tutorial video](https://youtu.be/8M4hxKeoeOk) for the entire 3d printer set up process.
 
 ## Tools Needed
 
